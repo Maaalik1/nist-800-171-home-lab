@@ -38,11 +38,11 @@ Four control families (51 requirements): **Access Control (3.1)**, **Audit & Acc
 
 | Status | Count |
 |---|---|
-| ✅ Met | 14 |
+| ✅ Met | 17 |
 | 🟡 Partially Met | 2 |
 | ❌ Not Met | 1 |
 | ➖ N/A | 5 |
-| ⏳ Not yet assessed | 29 |
+| ⏳ Not yet assessed | 26 |
 
 *(Updated as phases are completed. Full detail in `NIST-800-171-Gap-Assessment.xlsx`.)*
 
@@ -59,6 +59,8 @@ Four control families (51 requirements): **Access Control (3.1)**, **Audit & Acc
 | **3.1.9** | Security notice | "AUTHORIZED USE ONLY" banner via GPO | [banner](evidence/3.1.9-logon-banner.png) |
 | **3.1.10** | Session lock | 15-minute inactivity limit via GPO | GPO setting, [gpresult](evidence/gpo-applied-gpresult.png) |
 | **3.3.1 / 3.3.2** | Audit logs traceable to users | Advanced audit: logon, credential validation, account management | Event 4740 names the locked-out user → [event](evidence/3.3.1-event-4740-lockout.png) |
+| **3.3.5** | Correlate audit review across sources | Splunk SIEM collecting Security logs from DC01 and WS01 | Brute-force on WS01 (4625) correlated with lockout on DC01 (4740) → [detection](evidence/3.3.5-splunk-brute-force-detection.png), [dashboard](evidence/3.3.5-splunk-dashboard.png) |
+| **3.3.8** | Protect audit logs | Logs forwarded off-host to a central SIEM | [DC01 events in Splunk](evidence/3.3.1-splunk-dc01-events.png) |
 | **3.3.7** | Time synchronization | Fixed time zone and clock drift; domain time hierarchy | See *Key Finding* below |
 | **3.5.7 / 3.5.8 / 3.5.10** | Password complexity, history, no reversible encryption | Min 12 chars, complexity on, 24 remembered | Weak password rejected → [policy](evidence/3.5.7-password-policy.png) |
 
@@ -80,7 +82,7 @@ After promoting the domain controller, its clock was **three hours off**, and th
 |---|---|---|---|---|
 | POAM-01 | 3.5.3 | No multifactor authentication | High | Pilot MFA on the admin account, then all users |
 | POAM-02 | 3.1.7 | Privileged function use not audited | Moderate | Enable sensitive privilege use + process creation auditing |
-| POAM-03 | 3.3.1 | Logs stored locally only | Moderate | Deploy Wazuh SIEM; define 90-day retention *(Phase 5)* |
+| ~~POAM-03~~ | 3.3.1 | ~~Logs stored locally only~~ **CLOSED** | Moderate | ✅ Deployed Splunk SIEM; DC01 + WS01 forwarding Security logs |
 
 ---
 
@@ -90,8 +92,19 @@ After promoting the domain controller, its clock was **three hours off**, and th
 - [x] **Phase 2:** OUs, role-based groups, separate admin account
 - [x] **Phase 3:** Domain-joined workstation; access control test (allow/deny)
 - [x] **Phase 4:** Group Policy hardening (lockout, banner, session lock, audit logging); tested
-- [ ] **Phase 5:** Wazuh SIEM + Sysmon; brute-force from Kali and detect it
+- [x] **Phase 5:** Splunk SIEM; forwarders on DC01 + WS01; brute-force detected and correlated across hosts; monitoring dashboard built
 - [ ] **Phase 6:** Vulnerability scanning (before/after), network segmentation, MFA
+
+---
+
+## Phase 5 Highlight: Detection
+
+I deployed a **Splunk** server (Ubuntu) and installed Universal Forwarders on DC01 and WS01 to ship their Windows Security logs to a central index. Then I re-ran the lockout test and watched Splunk catch it:
+
+- **WS01** recorded 10 failed logons (EventCode 4625) for `adoe`
+- **DC01** recorded the resulting lockout (EventCode 4740)
+
+Splunk **correlated a brute-force attempt and its lockout across two different hosts** — the core job of a SOC. I also built a monitoring dashboard for failed logons and lockouts. This closed POAM-03 (logs are now centrally collected off-host).
 
 ---
 
